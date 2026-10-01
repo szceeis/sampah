@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -42,8 +41,10 @@ export default function LoginPage() {
 
       localStorage.setItem("user", JSON.stringify(user));
 
-      // Arahkan sesuai role jika server mengirimkannya
-      if (user.role === "admin") {
+      // DIUBAH: Menggunakan .toUpperCase() agar aman dari perbedaan huruf kapital ("ADMIN" vs "admin")
+      const userRole = (user.role || "").toUpperCase();
+
+      if (userRole === "ADMIN") {
         router.push("/admin/dashboard");
       } else {
         router.push("/user/dashboard");
