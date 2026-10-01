@@ -14,7 +14,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Pastikan laporan belum pernah dijadwalkan
+    // Pastikan laporan belum pernah dijadwalkan sebelumnya
     const existingPenjemputan = await prisma.penjemputan.findUnique({
       where: { laporanId },
     });
@@ -26,32 +26,47 @@ export async function POST(request: Request) {
       );
     }
 
-    // Jika petugasId tidak valid / kosong, ambil petugas pertama secara otomatis dari database
-    if (!petugasId || petugasId === "1") {
-      const petugasPertama = await prisma.petugas.findFirst();
-      if (petugasPertama) {
-        petugasId = petugasPertama.id;
-      } else {
-        return NextResponse.json(
-          { message: "Belum ada data petugas di database. Tambahkan petugas terlebih dahulu." },
-          { status: 400 }
-        );
+    // Jika petugasId dikirim (misal "2" atau string lain), pastikan petugas tersebut ada di database.
+    // Jika tidak ditemukan, ambil petugas pertama yang tersedia.
+    let targetPetugasId = petugasId;
+    if (targetPetugasId) {
+      const cekPetugas = await prisma.petugas.findUnique({
+        where: { id: targetPetugasId },
+      });
+      if (!cekPetugas) {
+        const petugasPertama = await prisma.petugas.findFirst();
+        targetPetugasId = petugasPertama ? petugasPertama.id : null;
       }
+    } else {
+      const petugasPertama = await prisma.petugas.findFirst();
+      targetPetugasId = petugasPertama ? petugasPertama.id : null;
     }
 
-    // Validasi dan parsing tanggal jemput dengan aman
-    let finalTanggalJemput = new Date();
-    if (tanggalJemput && !isNaN(Date.parse(tanggalJemput))) {
+    if (!targetPetugasId) {
+      return NextResponse.json(
+        { message: "Tidak ada data petugas yang tersedia di database." },
+        { status: 400 }
+      );
+    }
+
+    // Pastikan tanggalJemput valid. Jika kosong atau string "Invalid Date", set otomatis besok.
+    let finalTanggalJemput: Date;
+    if (
+      tanggalJemput &&
+      tanggalJemput !== "Invalid Date" &&
+      !isNaN(Date.parse(tanggalJemput))
+    ) {
       finalTanggalJemput = new Date(tanggalJemput);
     } else {
-      // Jika tanggal tidak valid/kosong, otomatis set keesokan harinya
-      finalTanggalJemput.setDate(finalTanggalJemput.getDate() + 1);
+      finalTanggalJemput = new Date();
+      finalTanggalJemput.setDate(finalTanggalJemput.getDate() + 1); // Set keesokan hari
     }
 
+    // Simpan ke database
     const penjemputanBaru = await prisma.penjemputan.create({
       data: {
         laporanId,
-        petugasId,
+        petugasId: targetPetugasId,
         tanggalJemput: finalTanggalJemput,
         status: "MENUNGGU",
       },
