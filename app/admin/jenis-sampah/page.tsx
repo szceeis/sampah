@@ -3,41 +3,37 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 
-interface Penjemputan {
+interface JenisSampah {
   id: string;
-  tanggalJemput: string;
-  status: string;
-  laporan: {
-    id: string;
-    alamat: string;
-    beratKg: number | null;
-    user: { nama: string; noHp: string };
-    jenisSampah: { namaJenis: string };
-    wilayah: { namaWilayah: string };
-  };
-  petugas: {
-    nama: string;
-  };
+  namaJenis: string;
+  hargaPerKg: number;
+  deskripsi?: string;
 }
 
-export default function PenjemputanPage() {
-  const [penjemputanList, setPenjemputanList] = useState<Penjemputan[]>([]);
+export default function JenisSampahPage() {
+  const [jenisSampahList, setJenisSampahList] = useState<JenisSampah[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  
+  // State form tambah jenis sampah baru
+  const [namaJenis, setNamaJenis] = useState("");
+  const [hargaPerKg, setHargaPerKg] = useState("");
+  const [deskripsi, setDeskripsi] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const fetchPenjemputan = async () => {
+  const fetchJenisSampah = async () => {
     try {
       setError("");
-      const res = await fetch("/api/penjemputan");
+      const res = await fetch("/api/jenis-sampah");
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || "Gagal memuat jadwal penjemputan.");
+        throw new Error(data.message || "Gagal memuat data jenis sampah.");
       }
 
-      setPenjemputanList(Array.isArray(data) ? data : []);
+      setJenisSampahList(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Gagal memuat penjemputan:", err);
+      console.error("Gagal memuat jenis sampah:", err);
       setError(
         err instanceof Error
           ? err.message
@@ -49,46 +45,52 @@ export default function PenjemputanPage() {
   };
 
   useEffect(() => {
-    fetchPenjemputan();
+    fetchJenisSampah();
   }, []);
 
-  const formatTanggal = (tanggal: string) => {
-    if (!tanggal) return "Jadwal belum ditentukan";
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!namaJenis || !hargaPerKg) {
+      alert("Nama jenis sampah dan harga wajib diisi!");
+      return;
+    }
 
-    const date = new Date(tanggal);
-    if (Number.isNaN(date.getTime())) return "Tanggal tidak valid";
+    try {
+      setSubmitting(true);
+      const res = await fetch("/api/jenis-sampah", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          namaJenis,
+          hargaPerKg: Number(hargaPerKg),
+          deskripsi,
+        }),
+      });
 
-    return date.toLocaleString("id-ID", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Gagal menambahkan jenis sampah");
+      }
+
+      // Reset form & muat ulang data
+      setNamaJenis("");
+      setHargaPerKg("");
+      setDeskripsi("");
+      fetchJenisSampah();
+      alert("Jenis sampah berhasil ditambahkan!");
+    } catch (err: any) {
+      alert(err.message || "Terjadi kesalahan");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const getStatusStyle = (status: string): CSSProperties => {
-    const value = status?.toUpperCase() || "";
-
-    if (value.includes("SELESAI") || value.includes("DIANGKUT")) {
-      return {
-        background: "#dcfce7",
-        color: "#166534",
-      };
-    }
-
-    if (value.includes("BATAL") || value.includes("TOLAK")) {
-      return {
-        background: "#fee2e2",
-        color: "#991b1b",
-      };
-    }
-
-    return {
-      background: "#fef3c7",
-      color: "#92400e",
-    };
+  const formatRupiah = (angka: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      maximumFractionDigits: 0,
+    }).format(angka);
   };
 
   return (
@@ -113,150 +115,105 @@ export default function PenjemputanPage() {
       <section style={styles.container}>
         <div style={styles.heading}>
           <div>
-            <p style={styles.eyebrow}>PENGELOLAAN OPERASIONAL</p>
-            <h1 style={styles.title}>Jadwal Penjemputan</h1>
+            <p style={styles.eyebrow}>PENGELOLAAN DATA</p>
+            <h1 style={styles.title}>Jenis Sampah & Harga</h1>
             <p style={styles.subtitle}>
-              Pantau jadwal pengangkutan dan informasi petugas yang bertugas.
+              Atur jenis sampah dan nominal insentif atau harga per kg.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={fetchPenjemputan}
+            onClick={fetchJenisSampah}
             style={styles.refreshButton}
           >
             ↻ <span>Muat ulang</span>
           </button>
         </div>
 
-        <div style={styles.summary}>
-          <div style={styles.summaryIcon}>▣</div>
-          <div>
-            <p style={styles.summaryLabel}>Total jadwal</p>
-            <p style={styles.summaryValue}>{penjemputanList.length}</p>
+        {/* Layout Grid: Form Tambah di Kiri, Daftar di Kanan */}
+        <div style={styles.contentGrid}>
+          {/* Form Tambah Jenis Sampah */}
+          <div style={styles.formCard}>
+            <h2 style={styles.cardSectionTitle}>Tambah Jenis Sampah</h2>
+            <form onSubmit={handleSubmit} style={styles.form}>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Nama Jenis Sampah</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Plastik / Kertas"
+                  value={namaJenis}
+                  onChange={(e) => setNamaJenis(e.target.value)}
+                  style={styles.input}
+                  required
+                />
+              </div>
+
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Harga / Insentif per Kg (Rp)</label>
+                <input
+                  type="number"
+                  placeholder="Contoh: 3500"
+                  value={hargaPerKg}
+                  onChange={(e) => setHargaPerKg(e.target.value)}
+                  style={styles.input}
+                  required
+                />
+              </div>
+
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Deskripsi (Opsional)</label>
+                <textarea
+                  placeholder="Keterangan singkat jenis sampah..."
+                  value={deskripsi}
+                  onChange={(e) => setDeskripsi(e.target.value)}
+                  style={styles.textarea}
+                />
+              </div>
+
+              <button type="submit" disabled={submitting} style={styles.submitButton}>
+                {submitting ? "Menyimpan..." : "Simpan Jenis Sampah"}
+              </button>
+            </form>
+          </div>
+
+          {/* List Daftar Jenis Sampah */}
+          <div style={styles.listContainer}>
+            <h2 style={styles.cardSectionTitle}>Daftar Kategori Sampah</h2>
+            {loading ? (
+              <div style={styles.messageBox}>
+                <div style={styles.spinner} />
+                <p style={styles.messageText}>Memuat data...</p>
+              </div>
+            ) : error ? (
+              <div style={styles.messageBox}>
+                <p style={{ color: "#b91c1c" }}>{error}</p>
+              </div>
+            ) : jenisSampahList.length === 0 ? (
+              <div style={styles.messageBox}>
+                <p style={styles.messageText}>Belum ada data jenis sampah.</p>
+              </div>
+            ) : (
+              <div style={styles.cardGrid}>
+                {jenisSampahList.map((item) => (
+                  <article key={item.id} style={styles.card}>
+                    <div>
+                      <span style={styles.badge}>Aktif</span>
+                      <h3 style={styles.itemTitle}>{item.namaJenis}</h3>
+                      {item.deskripsi && (
+                        <p style={styles.itemDesc}>{item.deskripsi}</p>
+                      )}
+                    </div>
+                    <div style={styles.priceBox}>
+                      <span style={styles.priceLabel}>Harga / kg</span>
+                      <span style={styles.priceValue}>{formatRupiah(item.hargaPerKg)}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-
-        {loading ? (
-          <div style={styles.messageBox}>
-            <div style={styles.spinner} />
-            <p style={styles.messageTitle}>Memuat jadwal...</p>
-            <p style={styles.messageText}>
-              Sedang mengambil data penjemputan sampah.
-            </p>
-          </div>
-        ) : error ? (
-          <div style={styles.messageBox}>
-            <div style={styles.messageIconError}>!</div>
-            <p style={styles.messageTitle}>Data belum bisa ditampilkan</p>
-            <p style={styles.messageText}>{error}</p>
-            <button
-              type="button"
-              onClick={fetchPenjemputan}
-              style={styles.retryButton}
-            >
-              Coba lagi
-            </button>
-          </div>
-        ) : penjemputanList.length === 0 ? (
-          <div style={styles.messageBox}>
-            <div style={styles.emptyIcon}>▤</div>
-            <p style={styles.messageTitle}>Belum ada jadwal penjemputan</p>
-            <p style={styles.messageText}>
-              Jadwal yang sudah dibuat akan muncul di halaman ini.
-            </p>
-          </div>
-        ) : (
-          <div style={styles.cardGrid}>
-            {penjemputanList.map((item) => (
-              <article key={item.id} style={styles.card}>
-                <div style={styles.cardTop}>
-                  <div style={styles.cardTopText}>
-                    <p style={styles.cardLabel}>JADWAL PENJEMPUTAN</p>
-                    <h2 style={styles.cardTitle}>
-                      {item.laporan?.jenisSampah?.namaJenis || "Jenis sampah"}
-                    </h2>
-                  </div>
-
-                  <span style={{ ...styles.status, ...getStatusStyle(item.status) }}>
-                    {item.status || "MENUNGGU"}
-                  </span>
-                </div>
-
-                <div style={styles.datePanel}>
-                  <span style={styles.dateIcon}>◷</span>
-                  <div>
-                    <p style={styles.detailLabel}>Waktu penjemputan</p>
-                    <p style={styles.dateText}>
-                      {formatTanggal(item.tanggalJemput)}
-                    </p>
-                  </div>
-                </div>
-
-                <div style={styles.details}>
-                  <div style={styles.detailRow}>
-                    <span style={styles.detailIcon}>⚖</span>
-                    <div>
-                      <p style={styles.detailLabel}>Berat sampah</p>
-                      <p style={styles.detailValue}>
-                        {item.laporan?.beratKg ?? "-"} kg
-                      </p>
-                    </div>
-                  </div>
-
-                  <div style={styles.detailRow}>
-                    <span style={styles.detailIcon}>⌖</span>
-                    <div>
-                      <p style={styles.detailLabel}>Wilayah</p>
-                      <p style={styles.detailValue}>
-                        {item.laporan?.wilayah?.namaWilayah || "-"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div style={styles.detailRow}>
-                    <span style={styles.detailIcon}>⌂</span>
-                    <div>
-                      <p style={styles.detailLabel}>Alamat penjemputan</p>
-                      <p style={styles.detailValue}>
-                        {item.laporan?.alamat || "Alamat belum tersedia"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={styles.peoplePanel}>
-                  <div style={styles.person}>
-                    <div style={styles.avatar}>P</div>
-                    <div>
-                      <p style={styles.detailLabel}>Pelapor</p>
-                      <p style={styles.personName}>
-                        {item.laporan?.user?.nama || "-"}
-                      </p>
-                      <p style={styles.personPhone}>
-                        {item.laporan?.user?.noHp || "-"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div style={styles.personDivider} />
-
-                  <div style={styles.person}>
-                    <div style={{ ...styles.avatar, background: "#d1fae5" }}>
-                      ♙
-                    </div>
-                    <div>
-                      <p style={styles.detailLabel}>Petugas bertugas</p>
-                      <p style={styles.personName}>
-                        {item.petugas?.nama || "Belum ditentukan"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
       </section>
     </main>
   );
@@ -369,240 +326,134 @@ const styles: { [key: string]: CSSProperties } = {
     fontSize: "13px",
     fontWeight: 700,
     cursor: "pointer",
-    whiteSpace: "nowrap",
   },
-  summary: {
-    display: "flex",
-    alignItems: "center",
-    gap: "14px",
-    width: "fit-content",
-    minWidth: "190px",
-    padding: "16px 20px",
-    marginBottom: "24px",
+  contentGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 2fr",
+    gap: "24px",
+    alignItems: "start",
+  },
+  formCard: {
     background: "#ffffff",
+    padding: "24px",
+    borderRadius: "15px",
     border: "1px solid #e1eae4",
-    borderRadius: "13px",
     boxShadow: "0 3px 12px rgba(22, 65, 43, 0.04)",
   },
-  summaryIcon: {
-    width: "42px",
-    height: "42px",
-    borderRadius: "11px",
-    display: "grid",
-    placeItems: "center",
-    background: "#e3f5e9",
-    color: "#08784e",
-    fontSize: "21px",
+  listContainer: {
+    background: "#ffffff",
+    padding: "24px",
+    borderRadius: "15px",
+    border: "1px solid #e1eae4",
+    boxShadow: "0 3px 12px rgba(22, 65, 43, 0.04)",
   },
-  summaryLabel: {
-    margin: 0,
-    color: "#7b8981",
-    fontSize: "12px",
-  },
-  summaryValue: {
-    margin: "3px 0 0",
+  cardSectionTitle: {
+    margin: "0 0 18px",
+    fontSize: "18px",
+    fontWeight: 700,
     color: "#18352b",
-    fontSize: "23px",
-    fontWeight: 800,
+  },
+  form: {
+    display: "grid",
+    gap: "16px",
+  },
+  inputGroup: {
+    display: "grid",
+    gap: "6px",
+  },
+  label: {
+    fontSize: "12px",
+    fontWeight: 700,
+    color: "#4a6355",
+  },
+  input: {
+    padding: "10px 12px",
+    borderRadius: "8px",
+    border: "1px solid #d2e0d7",
+    fontSize: "13px",
+    outline: "none",
+  },
+  textarea: {
+    padding: "10px 12px",
+    borderRadius: "8px",
+    border: "1px solid #d2e0d7",
+    fontSize: "13px",
+    outline: "none",
+    minHeight: "80px",
+    resize: "vertical",
+  },
+  submitButton: {
+    background: "#08784e",
+    color: "#ffffff",
+    padding: "11px",
+    border: 0,
+    borderRadius: "8px",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: "13px",
+    marginTop: "6px",
   },
   cardGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-    gap: "20px",
+    gap: "14px",
   },
   card: {
-    minWidth: 0,
-    padding: "21px",
-    background: "#ffffff",
-    border: "1px solid #e1eae4",
-    borderRadius: "15px",
-    boxShadow: "0 5px 18px rgba(22, 65, 43, 0.05)",
-  },
-  cardTop: {
+    padding: "16px",
+    background: "#f9fbfa",
+    border: "1px solid #e5ede7",
+    borderRadius: "11px",
     display: "flex",
-    alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: "12px",
-    paddingBottom: "17px",
-    borderBottom: "1px solid #edf1ee",
-  },
-  cardTopText: {
-    minWidth: 0,
-  },
-  cardLabel: {
-    margin: "0 0 6px",
-    color: "#87958c",
-    fontSize: "10px",
-    fontWeight: 700,
-    letterSpacing: "1px",
-  },
-  cardTitle: {
-    margin: 0,
-    color: "#1d3b2e",
-    fontSize: "18px",
-    fontWeight: 800,
-    overflowWrap: "anywhere",
-  },
-  status: {
-    flexShrink: 0,
-    padding: "6px 9px",
-    borderRadius: "20px",
-    fontSize: "10px",
-    fontWeight: 800,
-    letterSpacing: "0.3px",
-  },
-  datePanel: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: "11px",
-    margin: "16px 0",
-    padding: "13px",
-    borderRadius: "10px",
-    background: "#f1f8f3",
-  },
-  dateIcon: {
-    color: "#168257",
-    fontSize: "21px",
-    lineHeight: 1,
-  },
-  dateText: {
-    margin: "4px 0 0",
-    color: "#24533d",
-    fontSize: "13px",
-    fontWeight: 700,
-    lineHeight: 1.5,
-  },
-  details: {
-    display: "grid",
-    gap: "15px",
-    padding: "2px 0 18px",
-  },
-  detailRow: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: "11px",
-  },
-  detailIcon: {
-    width: "28px",
-    height: "28px",
-    flexShrink: 0,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "8px",
-    background: "#f1f5f2",
-    color: "#527060",
-    fontSize: "15px",
-  },
-  detailLabel: {
-    margin: 0,
-    color: "#849188",
-    fontSize: "11px",
-    lineHeight: 1.4,
-  },
-  detailValue: {
-    margin: "3px 0 0",
-    color: "#344b3e",
-    fontSize: "13px",
-    fontWeight: 600,
-    lineHeight: 1.5,
-    overflowWrap: "anywhere",
-  },
-  peoplePanel: {
-    padding: "15px 0 0",
-    borderTop: "1px solid #edf1ee",
-    display: "grid",
-    gap: "13px",
-  },
-  person: {
-    display: "flex",
     alignItems: "center",
-    gap: "10px",
-    minWidth: 0,
   },
-  avatar: {
-    width: "34px",
-    height: "34px",
-    flexShrink: 0,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "50%",
-    background: "#e4f0e8",
-    color: "#176b4a",
-    fontSize: "13px",
+  badge: {
+    background: "#dcfce7",
+    color: "#166534",
+    fontSize: "10px",
     fontWeight: 800,
+    padding: "3px 8px",
+    borderRadius: "20px",
   },
-  personName: {
-    margin: "2px 0 0",
-    color: "#304b3c",
+  itemTitle: {
+    margin: "8px 0 4px",
+    fontSize: "16px",
+    fontWeight: 800,
+    color: "#1c3b2e",
+  },
+  itemDesc: {
+    margin: 0,
     fontSize: "12px",
-    fontWeight: 700,
+    color: "#738a7e",
   },
-  personPhone: {
-    margin: "2px 0 0",
-    color: "#829087",
+  priceBox: {
+    textAlign: "right",
+  },
+  priceLabel: {
+    display: "block",
     fontSize: "11px",
+    color: "#84968c",
   },
-  personDivider: {
-    height: "1px",
-    background: "#f0f3f1",
+  priceValue: {
+    display: "block",
+    fontSize: "15px",
+    fontWeight: 800,
+    color: "#08784e",
+    marginTop: "2px",
   },
   messageBox: {
-    minHeight: "220px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "30px 20px",
-    background: "#ffffff",
-    border: "1px solid #e1eae4",
-    borderRadius: "15px",
+    padding: "30px",
     textAlign: "center",
   },
   spinner: {
-    width: "30px",
-    height: "30px",
+    width: "24px",
+    height: "24px",
     border: "3px solid #dcebe1",
     borderTopColor: "#168257",
     borderRadius: "50%",
-    marginBottom: "15px",
-  },
-  messageTitle: {
-    margin: "10px 0 0",
-    color: "#254333",
-    fontSize: "16px",
-    fontWeight: 800,
+    margin: "0 auto 10px",
   },
   messageText: {
-    maxWidth: "430px",
-    margin: "7px 0 0",
     color: "#7c8981",
     fontSize: "13px",
-    lineHeight: 1.6,
-  },
-  messageIconError: {
-    width: "38px",
-    height: "38px",
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "50%",
-    background: "#fee2e2",
-    color: "#b91c1c",
-    fontSize: "20px",
-    fontWeight: 800,
-  },
-  emptyIcon: {
-    color: "#8aa998",
-    fontSize: "35px",
-  },
-  retryButton: {
-    marginTop: "17px",
-    padding: "9px 16px",
-    border: 0,
-    borderRadius: "8px",
-    background: "#08784e",
-    color: "#ffffff",
-    fontSize: "12px",
-    fontWeight: 700,
-    cursor: "pointer",
   },
 };
