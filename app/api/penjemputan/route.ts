@@ -26,21 +26,32 @@ export async function POST(request: Request) {
       );
     }
 
-    // Jika petugasId tidak dikirim dari frontend, ambil petugas pertama secara otomatis
-    if (!petugasId) {
+    // Jika petugasId tidak valid / kosong, ambil petugas pertama secara otomatis dari database
+    if (!petugasId || petugasId === "1") {
       const petugasPertama = await prisma.petugas.findFirst();
-      petugasId = petugasPertama ? petugasPertama.id : null;
+      if (petugasPertama) {
+        petugasId = petugasPertama.id;
+      } else {
+        return NextResponse.json(
+          { message: "Belum ada data petugas di database. Tambahkan petugas terlebih dahulu." },
+          { status: 400 }
+        );
+      }
     }
 
-    // Jika tanggalJemput tidak dikirim, otomatis set keesokan harinya
-    const finalTanggalJemput = tanggalJemput 
-      ? new Date(tanggalJemput) 
-      : new Date(Date.now() + 86400000); // Besok
+    // Validasi dan parsing tanggal jemput dengan aman
+    let finalTanggalJemput = new Date();
+    if (tanggalJemput && !isNaN(Date.parse(tanggalJemput))) {
+      finalTanggalJemput = new Date(tanggalJemput);
+    } else {
+      // Jika tanggal tidak valid/kosong, otomatis set keesokan harinya
+      finalTanggalJemput.setDate(finalTanggalJemput.getDate() + 1);
+    }
 
     const penjemputanBaru = await prisma.penjemputan.create({
       data: {
         laporanId,
-        petugasId: petugasId || undefined, // Boleh null jika tabel mengizinkan, atau pastikan data petugas ada
+        petugasId,
         tanggalJemput: finalTanggalJemput,
         status: "MENUNGGU",
       },
